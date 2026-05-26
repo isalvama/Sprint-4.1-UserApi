@@ -1,9 +1,12 @@
-package cat.itacademy.s04.t01.userapi.user;
+package cat.itacademy.s04.t01.userapi.user.model;
+
+import lombok.Getter;
 
 import java.util.UUID;
 
+@Getter
 public class User {
-    private UUID uuid;
+    private final UUID uuid;
     private final String name;
     private final String email;
 
@@ -13,15 +16,4 @@ public class User {
         this.uuid = uuid;
     }
 
-    public UUID getUuid() {
-        return uuid;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
 }

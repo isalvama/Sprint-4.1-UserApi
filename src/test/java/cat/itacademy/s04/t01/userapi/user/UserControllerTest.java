@@ -1,27 +1,41 @@
 package cat.itacademy.s04.t01.userapi.user;
-
-import org.junit.jupiter.api.BeforeEach;
+import cat.itacademy.s04.t01.userapi.user.dto.CreateUserDto;
+import cat.itacademy.s04.t01.userapi.user.dto.UserResponse;
+import cat.itacademy.s04.t01.userapi.user.exception.UserAlreadyExistsException;
+import cat.itacademy.s04.t01.userapi.user.exception.UserNotFoundException;
+import cat.itacademy.s04.t01.userapi.user.service.UserService;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import tools.jackson.databind.ObjectMapper;
-
+import java.util.List;
+import java.util.UUID;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-
-@WebMvcTest(UserController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
 class UserControllerTest {
 
-    @Autowired
-    private UserController controller;
+    private static final String NAME = "Alice";
+    private static final String EMAIL = "alice@mail.com";
+    private static final String ID = UUID.randomUUID().toString();
+    private static final UserResponse USER_RESPONSE = new UserResponse(NAME, EMAIL, ID);
+
+    @MockitoBean
+    private UserService userServiceImpl;
 
     @Autowired
     private MockMvc mockMvc;
@@ -29,90 +43,151 @@ class UserControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @BeforeEach
-    void clear (){
-        controller.users.clear();
+    @Nested
+    @DisplayName("PUT /user")
+    class CreateUser {
+        @Test
+        @DisplayName("returns 201 Created with Location header and response body")
+        void createUser_returns201WithLocationAndBodyUserWithId() throws Exception {
+            CreateUserDto createUserDto = new CreateUserDto(NAME, EMAIL);
+
+            when(userServiceImpl.createUser(createUserDto)).thenReturn(USER_RESPONSE);
+
+            ResultActions result = mockMvc.perform(post("/user")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(createUserDto)));
+
+            result.andExpect(status().isCreated())
+                    .andExpect(header().string("Location", containsString("/user/" + ID)))
+                    .andExpect(jsonPath("$.id").value(ID))
+                    .andExpect(jsonPath("$.name").value(NAME))
+                    .andExpect(jsonPath("$.email").value(EMAIL));
+            verify(userServiceImpl).createUser(createUserDto);
+        }
+
+        @Test
+        @DisplayName("returns 409 User Already Exists when email already exists")
+        void createUser_returns409UserAlreadyExists() throws Exception {
+            CreateUserDto createUserDto = new CreateUserDto(NAME, EMAIL);
+
+            when(userServiceImpl.createUser(createUserDto)).thenThrow(new UserAlreadyExistsException(createUserDto.email()));
+
+            ResultActions result = mockMvc.perform(post("/user")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(createUserDto)));
+
+            result.andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.title").value("User Already Exists"))
+                    .andExpect(jsonPath("$.status").value(409));
+            verify(userServiceImpl).createUser(createUserDto);
+        }
     }
 
-    @Test
-    void getUsers_returnsEmptyListInitially() throws Exception {
-        ResultActions result = mockMvc.perform(get("/users"));
-        result.andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.[*]").isEmpty());
+    @Nested
+    @DisplayName("GET /users")
+    class GetUsers {
+
+        @Test
+        @DisplayName("returns 200 OK with empty list")
+        void getUsers_returns200WithEmptyListInitially() throws Exception {
+            ResultActions result = mockMvc.perform(get("/users"));
+            result.andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$").isEmpty());
+        }
+
+        @Test
+        @DisplayName("returns 200 OK with list of users")
+        void getUsers_returns200WithListOfUsers() throws Exception {
+            String name2 = "Juan";
+            String email2 = "juan@mail.com";
+            String id2 = UUID.randomUUID().toString();
+            UserResponse userResponse2 = new UserResponse(name2, email2, id2);
+
+            when(userServiceImpl.getAllUsers()).thenReturn(List.of(USER_RESPONSE, userResponse2));
+
+            ResultActions result = mockMvc.perform(get("/users"));
+
+            result.andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[0].id").value(ID))
+                    .andExpect(jsonPath("$[0].name").value(NAME))
+                    .andExpect(jsonPath("$[0].email").value(EMAIL))
+                    .andExpect(jsonPath("$[1].id").value(id2))
+                    .andExpect(jsonPath("$[1].name").value(name2))
+                    .andExpect(jsonPath("$[1].email").value(email2));
+        }
     }
 
-    @Test
-    void createUser_returnsUserWithId() throws Exception {
-        CreateUserDto createUserDto = new CreateUserDto("Alice", "alice@email.com");
-        ResultActions result = mockMvc.perform(post("/user")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createUserDto)));
+    @Nested
+    @DisplayName("GET /user/{id}")
+    class GetUserById {
 
-        result.andExpect(jsonPath("$.name").value("Alice"))
-                .andExpect(jsonPath("$.email").value("alice@email.com"))
-                .andExpect(jsonPath("$.uuid").exists());
+        @Test
+        @DisplayName("returns 200 OK with user data")
+        void getUserById_returns200WithUserData() throws Exception {
+            when(userServiceImpl.getUserById(ID))
+                    .thenReturn(USER_RESPONSE);
+
+            ResultActions resultGet = mockMvc.perform(get("/user/{id}", ID)
+                    .contentType(MediaType.APPLICATION_JSON));
+
+            resultGet.andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(ID))
+                    .andExpect(jsonPath("$.name").value(NAME))
+                    .andExpect(jsonPath("$.email").value(EMAIL));
+        }
+
+        @Test
+        @DisplayName("returns 404 when user not found")
+        void getUserById_returns404NotFoundIfMissing() throws Exception {
+            String randomId = UUID.randomUUID().toString();
+
+            when(userServiceImpl.getUserById(randomId)).thenThrow(new UserNotFoundException("id", randomId));
+
+            ResultActions resultGet = mockMvc.perform(get("/user/{id}", randomId));
+
+            resultGet.andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.title").value("User Not Found"))
+                    .andExpect(jsonPath("$.status").value(404));
+        }
     }
 
-    @Test
-    void getUserById_returnsCorrectUser() throws Exception {
-        CreateUserDto createUserDto = new CreateUserDto("Alice", "alice@email.com");
-        MvcResult resultCreate = mockMvc.perform(post("/user")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createUserDto))).andReturn();
+    @Nested
+    @DisplayName("GET /users/search/{name}")
+    class GetUsersByName {
 
-        String content = resultCreate.getResponse().getContentAsString();
-        User createdUser = new ObjectMapper().readValue(content, User.class);
-        ResultActions resultGet = mockMvc.perform(get("/users/" + createdUser.getUuid())
-                .contentType(MediaType.APPLICATION_JSON));
-        resultGet.andExpect(jsonPath("$.name").value("Alice"))
-                .andExpect(jsonPath("$.email").value("alice@email.com"));
-    }
+        @Test
+        void getUserByName_returnsListOfUsers() throws Exception {
 
-    @Test
-    void getUserById_returnsNotFoundIfMissing() throws Exception {
+            String email2 = "a@mail.com";
+            String id2 = UUID.randomUUID().toString();
+            UserResponse userResponse2 = new UserResponse(NAME, email2, id2);
 
-        ResultActions resultGet = mockMvc.perform(get("/users/" + "randomid")
-                .contentType(MediaType.APPLICATION_JSON));
-        resultGet.andExpect(MockMvcResultMatchers.status().isNotFound());
-    }
+            when(userServiceImpl.getUserByName(NAME)).thenReturn(List.of(USER_RESPONSE, userResponse2));
 
-    @Test
-    void getUsers_withNameParam_returnsFilteredUsers() throws Exception {
+            ResultActions result = mockMvc.perform(get("/users/search/{name}", NAME));
+            result.andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[0].id").value(ID))
+                    .andExpect(jsonPath("$[0].name").value(NAME))
+                    .andExpect(jsonPath("$[0].email").value(EMAIL))
+                    .andExpect(jsonPath("$[1].id").value(id2))
+                    .andExpect(jsonPath("$[1].name").value(NAME))
+                    .andExpect(jsonPath("$[1].email").value(email2));
+        }
 
-        CreateUserDto createUserDtoJuan = new CreateUserDto("Juan", "juan@mail.com");
-        mockMvc.perform(post("/user")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createUserDtoJuan))).andReturn();
+        @Test
+        void getUserByName_returns404NotFoundIfMissing() throws Exception {
 
-        CreateUserDto createUserDtoJoe = new CreateUserDto("Joe", "joe@mail.com");
-        mockMvc.perform(post("/user")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createUserDtoJoe))).andReturn();
+            when(userServiceImpl.getUserByName(NAME)).thenThrow(new UserNotFoundException("name", NAME));
 
-
-
-        ResultActions resultGet = mockMvc.perform(get("/users").param("name", "Juan").contentType(MediaType.APPLICATION_JSON));
-        resultGet.andExpect(jsonPath("$[0].name").value("Juan"))
-                .andExpect(jsonPath("$[0].email").value("juan@mail.com"));
-    }
-
-    @Test
-    void getUserByName_withNamePathVariable_returnsFilteredUsers() throws Exception {
-
-        CreateUserDto createUserDtoJuan = new CreateUserDto("Albert", "a@mail.com");
-        mockMvc.perform(post("/user")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createUserDtoJuan))).andReturn();
-
-        CreateUserDto createUserDtoJoe = new CreateUserDto("Maria", "m@mail.com");
-        mockMvc.perform(post("/user")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createUserDtoJoe))).andReturn();
-
-        ResultActions resultGet = mockMvc.perform(get("/users/search/" + "maria")
-                .contentType(MediaType.APPLICATION_JSON));
-        resultGet.andExpect(jsonPath("$.name").value("Maria"))
-                .andExpect(jsonPath("$.email").value("m@mail.com"));
+            ResultActions result = mockMvc.perform(get("/users/search/{name}", NAME));
+            result.andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.title").value("User Not Found"))
+                    .andExpect(jsonPath("$.status").value(404));
+        }
     }
 }

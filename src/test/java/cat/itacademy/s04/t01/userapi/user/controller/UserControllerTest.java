@@ -1,4 +1,4 @@
-package cat.itacademy.s04.t01.userapi.user;
+package cat.itacademy.s04.t01.userapi.user.controller;
 import cat.itacademy.s04.t01.userapi.user.dto.CreateUserDto;
 import cat.itacademy.s04.t01.userapi.user.dto.UserResponse;
 import cat.itacademy.s04.t01.userapi.user.exception.UserAlreadyExistsException;
@@ -14,13 +14,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.UUID;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -80,6 +80,57 @@ class UserControllerTest {
                     .andExpect(jsonPath("$.title").value("User Already Exists"))
                     .andExpect(jsonPath("$.status").value(409));
             verify(userServiceImpl).createUser(createUserDto);
+        }
+
+
+        @Test
+        @DisplayName("returns 400 Bad Request when input data is invalid (name is blank)")
+        void createUser_returns404ValidationErrorInInputDataBlankName() throws Exception {
+            String jsonInput =
+                    "{\"name\": \"\", \"email\" : \"bob@domain.com\"}";
+
+
+            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.post("/user")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(jsonInput));
+
+           result.andExpect(status().isBadRequest())
+                            .andExpect(jsonPath("$.title").value("Validation Error in input data"))
+                            .andExpect(jsonPath("$.errors").exists());
+
+           verifyNoInteractions(userServiceImpl);
+        }
+
+        @Test
+        @DisplayName("returns 400 Bad Request when input data is invalid (email is blank)")
+        void createUser_returns404ValidationErrorInInputDataBlankEmail() throws Exception {
+            String jsonInput =
+                    "{\"name\": \"Alice\", \"email\" : \"\"}";
+
+            ResultActions result1 = mockMvc.perform(MockMvcRequestBuilders.post("/user")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(jsonInput));
+
+            result1.andExpect(status().isBadRequest())
+                            .andExpect(jsonPath("$.title").value("Validation Error in input data"))
+                            .andExpect(jsonPath("$.errors").exists());
+            verifyNoInteractions(userServiceImpl);
+        }
+
+        @Test
+        @DisplayName("returns 400 Bad Request when input data is invalid (name is null)")
+        void createUser_returns404ValidationErrorInInputDataInvalidEmail() throws Exception {
+            String jsonInput =
+                    "{\"name\": \"Alice\", \"email\" : \"invalidEmail\"}";
+
+            ResultActions result1 = mockMvc.perform(MockMvcRequestBuilders.post("/user")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(jsonInput));
+
+            result1.andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.title").value("Validation Error in input data"))
+                    .andExpect(jsonPath("$.errors").exists());
+            verifyNoInteractions(userServiceImpl);
         }
     }
 
@@ -152,6 +203,32 @@ class UserControllerTest {
                     .andExpect(jsonPath("$.title").value("User Not Found"))
                     .andExpect(jsonPath("$.status").value(404));
         }
+
+        @Test
+        @DisplayName("returns 400 Bad Request when path variable id size is greater than max constraint")
+        void getUserById_idIsGreaterThanMaxConstraint_returns404ValidationErrorInParameter() throws Exception {
+            String invalidId = "a".repeat(41);
+            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/user/{id}", invalidId)
+                    .contentType(MediaType.APPLICATION_JSON));
+
+            result.andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.title").value("Validation Error in Parameter"))
+                    .andExpect(jsonPath("$.errors").exists());
+            verifyNoInteractions(userServiceImpl);
+        }
+
+        @Test
+        @DisplayName("returns 400 Bad Request when path variable id size is smaller than min constraint")
+        void getUserById_idIsGreaterThanMinConstraint_returns404ValidationErrorInParameter() throws Exception {
+            String invalidId = "a".repeat(29);
+            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/user/{id}", invalidId)
+                    .contentType(MediaType.APPLICATION_JSON));
+
+            result.andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.title").value("Validation Error in Parameter"))
+                    .andExpect(jsonPath("$.errors").exists());
+            verifyNoInteractions(userServiceImpl);
+        }
     }
 
     @Nested
@@ -190,6 +267,18 @@ class UserControllerTest {
             result.andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.title").value("User Not Found"))
                     .andExpect(jsonPath("$.status").value(404));
+        }
+
+        @Test
+        @DisplayName("returns 400 Bad Request when path variable is empty")
+        void getUserByName_nameIsEmpty_returns404ValidationErrorInParameter() throws Exception {
+            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/users/search/{name}", "")
+                    .contentType(MediaType.APPLICATION_JSON));
+
+            result.andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.title").value("Validation Error in Parameter"))
+                    .andExpect(jsonPath("$.errors").exists());
+            verifyNoInteractions(userServiceImpl);
         }
     }
 }

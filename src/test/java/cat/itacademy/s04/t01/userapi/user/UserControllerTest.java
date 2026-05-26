@@ -159,6 +159,7 @@ class UserControllerTest {
     class GetUsersByName {
 
         @Test
+        @DisplayName("returns 200 OK with list of user data")
         void getUserByName_returnsListOfUsers() throws Exception {
 
             String email2 = "a@mail.com";
@@ -180,6 +181,7 @@ class UserControllerTest {
         }
 
         @Test
+        @DisplayName("returns 404 when users with name passed as path variable are not found")
         void getUserByName_returns404NotFoundIfMissing() throws Exception {
 
             when(userServiceImpl.getUserByName(NAME)).thenThrow(new UserNotFoundException("name", NAME));

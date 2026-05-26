@@ -5,11 +5,9 @@ import jakarta.validation.constraints.*;
 import org.jetbrains.annotations.NotNull;
 
 public record CreateUserDto(
-        @NotNull
         @NotBlank(message = "Name cannot be empty")
         String name,
 
-        @NotNull
         @NotBlank(message = "The email cannot be empty")
         @Email(message = "The email format is not valid")
         String email) {

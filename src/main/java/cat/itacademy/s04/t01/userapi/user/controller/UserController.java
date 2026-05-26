@@ -3,6 +3,8 @@ package cat.itacademy.s04.t01.userapi.user.controller;
 import cat.itacademy.s04.t01.userapi.user.dto.CreateUserDto;
 import cat.itacademy.s04.t01.userapi.user.dto.UserResponse;
 import cat.itacademy.s04.t01.userapi.user.service.UserService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +23,7 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/user")
-    public ResponseEntity<UserResponse> createUser(@RequestBody CreateUserDto createUserDto) {
+    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserDto createUserDto) {
         UserResponse response = userService.createUser(createUserDto);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(response.id()).toUri();
         return ResponseEntity.created(location).body(response);
@@ -40,7 +42,7 @@ public class UserController {
     }
 
     @GetMapping("/users/search/{name}")
-    public ResponseEntity<List<UserResponse>> getUserByName(@PathVariable String name) {
+    public ResponseEntity<List<UserResponse>> getUserByName(@PathVariable @NotBlank String name) {
         List<UserResponse> users =  userService.getUserByName(name);
         return ResponseEntity.ok(users);
     }

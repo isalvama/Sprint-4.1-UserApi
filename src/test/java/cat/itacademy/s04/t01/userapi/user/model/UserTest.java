@@ -1,70 +1,61 @@
 package cat.itacademy.s04.t01.userapi.user.model;
 
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
+import cat.itacademy.s04.t01.userapi.user.exception.InvalidUserException;
 import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import java.util.Set;
 import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class UserTest {
+    private static final String NAME = "Maria";
+    private static final String EMAIL = "m@mail.com";
+    private static final UUID ID = UUID.randomUUID();
+
 
     private Validator validator;
-
-    @BeforeEach
-    void setUp() {
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-        validator = factory.getValidator();
-    }
 
     @Test
     @DisplayName("Should validate successfully when all fields are correct")
     void validate_success() {
-        User user = new User("Alice", "alice@mail.com", UUID.randomUUID());
-
-        Set<ConstraintViolation<User>> violations = validator.validate(user);
-
-        assertTrue(violations.isEmpty(), "Should have no violations");
+       assertDoesNotThrow(() -> {
+                   new User(NAME, EMAIL, UUID.randomUUID());
+               }
+       );
     }
 
     @Test
-    @DisplayName("Should have violations when fields are null or blank")
+    @DisplayName("Should throw InvalidUserException when fields are null or blank")
     void validate_blankFields() {
-        User user = new User("", "not-an-email", null);
+        Exception exceptionBlankName = assertThrows(InvalidUserException.class, () -> {
+                    new User("", EMAIL, ID);
+                });
+        assertTrue(exceptionBlankName.getMessage().contains("User's Name"));
+        assertTrue(exceptionBlankName.getMessage().contains("blank"));
 
-        Set<ConstraintViolation<User>> violations = validator.validate(user);
-        assertTrue(violations.size() >= 3);
+        Exception exceptionBlankEmail = assertThrows(InvalidUserException.class, () -> {
+            new User(NAME, "", ID);
+        });
+        assertTrue(exceptionBlankEmail.getMessage().contains("User's Email"));
+        assertTrue(exceptionBlankEmail.getMessage().contains("blank"));
+
+        Exception exceptionNullId = assertThrows(InvalidUserException.class, () -> {
+            new User(NAME, EMAIL, null);
+        });
+        assertTrue(exceptionNullId.getMessage().contains("User's Id"));
+        assertTrue(exceptionNullId.getMessage().contains("null"));
+
     }
 
     @Test
-    @DisplayName("Should fail when email format is invalid")
+    @DisplayName("Should throw InvalidUserException when email format is invalid")
     void validate_invalidEmail() {
-        User user = new User("Alice", "email-falso", UUID.randomUUID());
+        Exception exception = assertThrows(InvalidUserException.class, () -> {new User(NAME, "false-email", ID);
+        });
 
-        Set<ConstraintViolation<User>> violations = validator.validate(user);
+        assertTrue(exception.getMessage().contains("User's Email"));
+        assertTrue(exception.getMessage().contains("not valid"));
 
-        boolean hasEmailError = violations.stream()
-                .anyMatch(v -> v.getPropertyPath().toString().equals("email"));
-
-        assertTrue(hasEmailError, "Should have a violation for the email field");
-    }
-
-    @Test
-    @DisplayName("Should fail when UUID is null")
-    void validate_nullUuid() {
-        User user = new User("Alice", "alice@mail.com", null);
-
-        Set<ConstraintViolation<User>> violations = validator.validate(user);
-
-        assertEquals(1, violations.size());
-        assertEquals("uuid", violations.iterator().next().getPropertyPath().toString());
     }
 
     @Test

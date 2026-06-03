@@ -8,16 +8,18 @@ A robust RESTful API built with **Spring Boot** for user management. This projec
 *   **Spring Boot 3.x**: Core framework.
 *   **Lombok**: To reduce boilerplate code.
 *   **Jakarta Validation**: For DTO and path parameter constraints.
+*   **Hibernate Validator (@UUID)**: Specific constraint for valid UUID strings.
 *   **Problem Detail (RFC 7807)**: For standardized API error responses.
 *   **In-Memory Storage**: Using Java collections to simulate a database.
 
 ## 📋 Features
 
-*   **Full CRUD Logic**: Create, Read (All), and Search (by ID or Name).
-*   **Strict Validation**: Email format verification, non-blank fields, and UUID string length constraints.
-*   **Global Exception Handling**: Centralized management of errors like `UserNotFound` or `UserAlreadyExists`.
-*   **Health Check**: Dedicated endpoint to monitor application status.
-*   **Data Mapping**: Custom `UserMapper` to decouple internal models from API responses.
+*   **RESTful Design**: Standardized resource naming and proper use of HTTP status codes.
+*   **Resource Creation**: Returns `201 Created` with a `Location` header pointing to the new resource.
+*   **Dynamic Search**: Dual-purpose endpoint to fetch all users or filter by name using query parameters.
+*   **Strict Validation**: Email format verification, non-blank fields, and strict UUID format validation for path variables.
+*   **Global Exception Handling**: Centralized management of errors using `@ControllerAdvice`.
+*   **Data Mapping**: Decoupled internal models from API responses via a dedicated Mapper.
 
 ## 📂 Project Structure
 
@@ -26,12 +28,12 @@ src/main/java/cat/itacademy/s04/t01/userapi/
 ├── UserapiApplication.java          # Main Application Entry Point
 ├── health_check/                    # Health monitoring components
 ├── user/
-    ├── controller/                  # REST Controllers
-    ├── dto/                        # Data Transfer Objects (Records)
-    ├── exception/                  # Custom Exceptions & Global Handler
-    ├── model/                      # Domain Entities
-    ├── repository/                 # Persistence Logic (Interface & In-Memory)
-    └── service/                    # Business Logic & Mappers
+    ├── controller/                  # REST Controllers (Endpoints definition)
+    ├── dto/                         # Data Transfer Objects (Records)
+    ├── exception/                   # Custom Exceptions & Global Handler
+    ├── model/                       # Domain Entities
+    ├── repository/                  # Persistence Logic (Interface & In-Memory)
+    └── service/                     # Business Logic & UserMapper
 ```
 
 ## 🛠️ Getting Started
@@ -51,17 +53,19 @@ src/main/java/cat/itacademy/s04/t01/userapi/
     ```bash
     ./mvnw spring-boot:run
     ```
-    The server will start at `http://localhost:8080`.
+    The server will start at `http://localhost:9000`.
 
 ## 🛣️ API Endpoints
+
+All user-related endpoints are prefixed with `/api/users`.
 
 ### User Management
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| **POST** | `/user` | Creates a new user. |
-| **GET** | `/users` | Returns a list of all registered users. |
-| **GET** | `/user/{id}` | Finds a user by UUID (Id must be between 30-40 chars). |
-| **GET** | `/users/search/{name}` | Searches for users by name (case-insensitive). |
+| **POST** | `/api/users` | Creates a new user. Returns `Location` header. |
+| **GET** | `/api/users` | Returns a list of all registered users. |
+| **GET** | `/api/users?name={val}` | Filters users by name (partial match, case-insensitive). |
+| **GET** | `/api/users/{id}` | Finds a single user. `{id}` must be a valid UUID. |
 
 ### System Status
 | Method | Endpoint | Description |
@@ -71,37 +75,43 @@ src/main/java/cat/itacademy/s04/t01/userapi/
 ## 🧪 Usage Examples
 
 ### Create a User
-**Request (POST `/user`):**
+**Request (POST `/api/users`):**
 ```json
 {
     "name": "Jane Doe",
     "email": "jane.doe@example.com"
 }
 ```
+**Response:** `201 Created`
+**Header:** `Location: http://localhost:8080/api/users/550e8400-e29b-41d4-a716-446655440000`
+
+### Search Users by Name
+**Request (GET `/api/users?name=jane`):**
+Returns all users whose name contains "jane".
 
 ### Error Response Example
-If you attempt to create a user with an existing email, the API returns a **409 Conflict** status with a standardized body:
+If you search for a malformed UUID (e.g., `/api/users/123`), the API returns a **400 Bad Request**:
 ```json
 {
     "type": "about:blank",
-    "title": "User Already Exists",
-    "status": 409,
-    "detail": "User already exists with email: jane.doe@example.com",
-    "instance": "/user"
+    "title": "Validation Error in Parameter",
+    "status": 400,
+    "detail": "getUserById.id: The ID must be a valid UUID",
+    "instance": "/api/users/123"
 }
 ```
 
 ## 🛡️ Exception Handling
 
-The application uses a `@ControllerAdvice` to catch and format exceptions:
-*   **404 Not Found**: Thrown when a specific ID or Name search yields no results.
-*   **409 Conflict**: Thrown when an email is already registered.
-*   **400 Bad Request**: Thrown when validation fails (e.g., malformed email or empty fields).
+The application uses a `@ControllerAdvice` to catch and format exceptions, using `ProblemDetail`:
+*   **404 Not Found**: User not found by ID or no results in name search.
+*   **409 Conflict**: Attempting to register an email that already exists.
+*   **400 Bad Request**: Validation failures in Request Body or Path Variables (Invalid UUID).
 
 ## 📝 Implementation Details
-*   **In-Memory Repository**: Uses a `List<User>` to store data. Data is lost when the application stops.
-*   **UUID**: Each user is automatically assigned a unique `UUID` upon creation.
-*   **Validation**: The `@Validated` annotation on the controller ensures that even path variables (like `{id}`) are checked before the logic executes.
+*   **UUID Validation**: Uses `@UUID` from Hibernate Validator on the `@PathVariable` to ensure type safety at the entry point.
+*   **Resource Location**: Utilizes `ServletUriComponentsBuilder` to dynamically generate the URL of newly created users.
+*   **In-Memory Repository**: Thread-safe operations on Java collections to ensure data consistency during the application lifecycle.
 
 ---
 *Developed for IT Academy.*

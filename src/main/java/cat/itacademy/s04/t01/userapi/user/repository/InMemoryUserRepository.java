@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Repository
 public class InMemoryUserRepository implements UserRepository{
@@ -26,16 +27,23 @@ public class InMemoryUserRepository implements UserRepository{
 
     @Override
     public Optional<User> findById(UUID id) {
-        return users.stream().findFirst().filter(user -> user.getUuid().equals(id));
+        return users.stream().filter(user -> user.getUuid().equals(id)).findFirst();
     }
 
     @Override
     public List<User> searchByName(String name) {
-        return users.stream().filter(user -> user.getName().equalsIgnoreCase(name)).toList();
+
+        var pattern = Pattern.compile(Pattern.quote(name), Pattern.CASE_INSENSITIVE);
+
+        return users.stream().filter(user -> pattern.matcher(user.getName()).find()).toList();
     }
 
     @Override
     public boolean existsByEmail(String email) {
         return users.stream().anyMatch(user -> user.getEmail().equalsIgnoreCase(email));
+    }
+
+    public void deleteAll() {
+        this.users.clear();
     }
 }

@@ -51,14 +51,14 @@ class UserApiIntegrationTest {
         @Test
         void createUser_returns201WithLocationWithId() throws Exception {
 
-            CreateUserDto createFruitDTO = new CreateUserDto(NAME, EMAIL);
+            CreateUserDto createUserDTO = new CreateUserDto(NAME, EMAIL);
 
             ResultActions result = mockMvc.perform(MockMvcRequestBuilders.post("/api/users")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(createFruitDTO)));
+                    .content(objectMapper.writeValueAsString(createUserDTO)));
 
             result.andExpect(status().isCreated())
-                    .andExpect(header().string("Location", containsString("/users/")))
+                    .andExpect(header().string("Location", containsString("/api/users/")))
                     .andExpect(jsonPath("$.id").exists())
                     .andExpect(jsonPath("$.name").value(NAME))
                     .andExpect(jsonPath("$.email").value(EMAIL));

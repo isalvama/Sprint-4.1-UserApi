@@ -3,13 +3,14 @@ import cat.itacademy.s04.t01.userapi.user.dto.CreateUserDto;
 import cat.itacademy.s04.t01.userapi.user.dto.UserResponse;
 import cat.itacademy.s04.t01.userapi.user.exception.UserAlreadyExistsException;
 import cat.itacademy.s04.t01.userapi.user.exception.UserNotFoundException;
+import cat.itacademy.s04.t01.userapi.user.service.UserMapper;
 import cat.itacademy.s04.t01.userapi.user.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -25,44 +26,50 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@WebMvcTest(UserController.class)
 class UserControllerTest {
 
     private static final String NAME = "Alice";
     private static final String EMAIL = "alice@mail.com";
     private static final String ID = UUID.randomUUID().toString();
     private static final UserResponse USER_RESPONSE = new UserResponse(NAME, EMAIL, ID);
+    private UserMapper userMapper;
+    private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private UserService userServiceImpl;
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @MockitoBean
+    private UserService userService;
+
+
+    @BeforeEach
+    void setUp() {
+        userMapper = new UserMapper();
+        objectMapper = new ObjectMapper();
+    }
 
     @Nested
-    @DisplayName("PUT /user")
+    @DisplayName("PUT /api/users")
     class CreateUser {
         @Test
         @DisplayName("returns 201 Created with Location header and response body")
         void createUser_returns201WithLocationAndBodyUserWithId() throws Exception {
             CreateUserDto createUserDto = new CreateUserDto(NAME, EMAIL);
 
-            when(userServiceImpl.createUser(createUserDto)).thenReturn(USER_RESPONSE);
+            when(userService.createUser(createUserDto)).thenReturn(USER_RESPONSE);
 
-            ResultActions result = mockMvc.perform(post("/user")
+            ResultActions result = mockMvc.perform(post("/api/users")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(createUserDto)));
 
             result.andExpect(status().isCreated())
-                    .andExpect(header().string("Location", containsString("/user/" + ID)))
+                    .andExpect(header().string("Location", containsString("/users/" + ID)))
                     .andExpect(jsonPath("$.id").value(ID))
                     .andExpect(jsonPath("$.name").value(NAME))
                     .andExpect(jsonPath("$.email").value(EMAIL));
-            verify(userServiceImpl).createUser(createUserDto);
+            verify(userService).createUser(createUserDto);
         }
 
         @Test
@@ -70,27 +77,27 @@ class UserControllerTest {
         void createUser_returns409UserAlreadyExists() throws Exception {
             CreateUserDto createUserDto = new CreateUserDto(NAME, EMAIL);
 
-            when(userServiceImpl.createUser(createUserDto)).thenThrow(new UserAlreadyExistsException(createUserDto.email()));
+            when(userService.createUser(createUserDto)).thenThrow(new UserAlreadyExistsException(createUserDto.email()));
 
-            ResultActions result = mockMvc.perform(post("/user")
+            ResultActions result = mockMvc.perform(post("/api/users")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(createUserDto)));
 
             result.andExpect(status().isConflict())
                     .andExpect(jsonPath("$.title").value("User Already Exists"))
                     .andExpect(jsonPath("$.status").value(409));
-            verify(userServiceImpl).createUser(createUserDto);
+            verify(userService).createUser(createUserDto);
         }
 
 
         @Test
         @DisplayName("returns 400 Bad Request when input data is invalid (name is blank)")
-        void createUser_returns404ValidationErrorInInputDataBlankName() throws Exception {
+        void createUser_returns400ValidationErrorInInputDataBlankName() throws Exception {
             String jsonInput =
                     "{\"name\": \"\", \"email\" : \"bob@domain.com\"}";
 
 
-            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.post("/user")
+            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.post("/api/users")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(jsonInput));
 
@@ -98,53 +105,55 @@ class UserControllerTest {
                             .andExpect(jsonPath("$.title").value("Validation Error in input data"))
                             .andExpect(jsonPath("$.errors").exists());
 
-           verifyNoInteractions(userServiceImpl);
+           verifyNoInteractions(userService);
         }
 
         @Test
         @DisplayName("returns 400 Bad Request when input data is invalid (email is blank)")
-        void createUser_returns404ValidationErrorInInputDataBlankEmail() throws Exception {
+        void createUser_returns400ValidationErrorInInputDataBlankEmail() throws Exception {
             String jsonInput =
                     "{\"name\": \"Alice\", \"email\" : \"\"}";
 
-            ResultActions result1 = mockMvc.perform(MockMvcRequestBuilders.post("/user")
+            ResultActions result1 = mockMvc.perform(MockMvcRequestBuilders.post("/api/users")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(jsonInput));
 
             result1.andExpect(status().isBadRequest())
                             .andExpect(jsonPath("$.title").value("Validation Error in input data"))
                             .andExpect(jsonPath("$.errors").exists());
-            verifyNoInteractions(userServiceImpl);
+
+            verifyNoInteractions(userService);
         }
 
         @Test
-        @DisplayName("returns 400 Bad Request when input data is invalid (name is null)")
-        void createUser_returns404ValidationErrorInInputDataInvalidEmail() throws Exception {
+        @DisplayName("returns 400 Bad Request when input data is invalid (email is invalid)")
+        void createUser_returns400ValidationErrorInInputDataInvalidEmail() throws Exception {
             String jsonInput =
                     "{\"name\": \"Alice\", \"email\" : \"invalidEmail\"}";
 
-            ResultActions result1 = mockMvc.perform(MockMvcRequestBuilders.post("/user")
+            ResultActions result1 = mockMvc.perform(MockMvcRequestBuilders.post("/api/users")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(jsonInput));
 
             result1.andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.title").value("Validation Error in input data"))
                     .andExpect(jsonPath("$.errors").exists());
-            verifyNoInteractions(userServiceImpl);
+            verifyNoInteractions(userService);
         }
     }
 
     @Nested
-    @DisplayName("GET /users")
+    @DisplayName("GET /api/users")
     class GetUsers {
 
         @Test
         @DisplayName("returns 200 OK with empty list")
         void getUsers_returns200WithEmptyListInitially() throws Exception {
-            ResultActions result = mockMvc.perform(get("/users"));
+            ResultActions result = mockMvc.perform(get("/api/users"));
             result.andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                     .andExpect(jsonPath("$").isEmpty());
+            verify(userService).getAllUsers();
         }
 
         @Test
@@ -155,9 +164,9 @@ class UserControllerTest {
             String id2 = UUID.randomUUID().toString();
             UserResponse userResponse2 = new UserResponse(name2, email2, id2);
 
-            when(userServiceImpl.getAllUsers()).thenReturn(List.of(USER_RESPONSE, userResponse2));
+            when(userService.getAllUsers()).thenReturn(List.of(USER_RESPONSE, userResponse2));
 
-            ResultActions result = mockMvc.perform(get("/users"));
+            ResultActions result = mockMvc.perform(get("/api/users"));
 
             result.andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -168,71 +177,60 @@ class UserControllerTest {
                     .andExpect(jsonPath("$[1].id").value(id2))
                     .andExpect(jsonPath("$[1].name").value(name2))
                     .andExpect(jsonPath("$[1].email").value(email2));
+            verify(userService).getAllUsers();
         }
     }
 
     @Nested
-    @DisplayName("GET /user/{id}")
+    @DisplayName("GET /api/users/{id}")
     class GetUserById {
 
         @Test
         @DisplayName("returns 200 OK with user data")
         void getUserById_returns200WithUserData() throws Exception {
-            when(userServiceImpl.getUserById(ID))
+            when(userService.getUserById(ID))
                     .thenReturn(USER_RESPONSE);
 
-            ResultActions resultGet = mockMvc.perform(get("/user/{id}", ID)
+            ResultActions resultGet = mockMvc.perform(get("/api/users/{id}", ID)
                     .contentType(MediaType.APPLICATION_JSON));
 
             resultGet.andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(ID))
                     .andExpect(jsonPath("$.name").value(NAME))
                     .andExpect(jsonPath("$.email").value(EMAIL));
+            verify(userService).getUserById(any());
         }
 
         @Test
-        @DisplayName("returns 404 when user not found")
+        @DisplayName("returns 404 when user is not found")
         void getUserById_returns404NotFoundIfMissing() throws Exception {
-            String randomId = UUID.randomUUID().toString();
 
-            when(userServiceImpl.getUserById(randomId)).thenThrow(new UserNotFoundException("id", randomId));
+            when(userService.getUserById(ID)).thenThrow(new UserNotFoundException("id", ID));
 
-            ResultActions resultGet = mockMvc.perform(get("/user/{id}", randomId));
+            ResultActions resultGet = mockMvc.perform(get("/api/users/{id}", ID));
 
             resultGet.andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.title").value("User Not Found"))
                     .andExpect(jsonPath("$.status").value(404));
+            verify(userService).getUserById(any());
         }
 
         @Test
-        @DisplayName("returns 400 Bad Request when path variable id size is greater than max constraint")
-        void getUserById_idIsGreaterThanMaxConstraint_returns404ValidationErrorInParameter() throws Exception {
-            String invalidId = "a".repeat(41);
-            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/user/{id}", invalidId)
+        @DisplayName("returns 400 Bad Request when the path variable id is not of UUID type")
+        void getUserById_idIsNotUUIDType_returns404ValidationErrorInParameter() throws Exception {
+            String invalidId = "a".repeat(36);
+            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/api/users/{id}", invalidId)
                     .contentType(MediaType.APPLICATION_JSON));
 
             result.andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.title").value("Validation Error in Parameter"))
                     .andExpect(jsonPath("$.errors").exists());
-            verifyNoInteractions(userServiceImpl);
-        }
-
-        @Test
-        @DisplayName("returns 400 Bad Request when path variable id size is smaller than min constraint")
-        void getUserById_idIsGreaterThanMinConstraint_returns404ValidationErrorInParameter() throws Exception {
-            String invalidId = "a".repeat(29);
-            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/user/{id}", invalidId)
-                    .contentType(MediaType.APPLICATION_JSON));
-
-            result.andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.title").value("Validation Error in Parameter"))
-                    .andExpect(jsonPath("$.errors").exists());
-            verifyNoInteractions(userServiceImpl);
+            verifyNoInteractions(userService);
         }
     }
 
     @Nested
-    @DisplayName("GET /users/search/{name}")
+    @DisplayName("GET /api/users")
     class GetUsersByName {
 
         @Test
@@ -243,9 +241,9 @@ class UserControllerTest {
             String id2 = UUID.randomUUID().toString();
             UserResponse userResponse2 = new UserResponse(NAME, email2, id2);
 
-            when(userServiceImpl.getUserByName(NAME)).thenReturn(List.of(USER_RESPONSE, userResponse2));
+            when(userService.getUserByName(NAME)).thenReturn(List.of(USER_RESPONSE, userResponse2));
 
-            ResultActions result = mockMvc.perform(get("/users/search/{name}", NAME));
+            ResultActions result = mockMvc.perform(get("/api/users").param("name", NAME));
             result.andExpect(status().isOk())
                     .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                     .andExpect(jsonPath("$", hasSize(2)))
@@ -255,30 +253,35 @@ class UserControllerTest {
                     .andExpect(jsonPath("$[1].id").value(id2))
                     .andExpect(jsonPath("$[1].name").value(NAME))
                     .andExpect(jsonPath("$[1].email").value(email2));
+            verify(userService).getUserByName(NAME);
         }
 
         @Test
         @DisplayName("returns 404 when users with name passed as path variable are not found")
         void getUserByName_returns404NotFoundIfMissing() throws Exception {
 
-            when(userServiceImpl.getUserByName(NAME)).thenThrow(new UserNotFoundException("name", NAME));
+            when(userService.getUserByName(NAME)).thenThrow(new UserNotFoundException("name", NAME));
 
-            ResultActions result = mockMvc.perform(get("/users/search/{name}", NAME));
+            ResultActions result = mockMvc.perform(get("/api/users").param("name", NAME));
             result.andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.title").value("User Not Found"))
                     .andExpect(jsonPath("$.status").value(404));
+            verify(userService).getUserByName(NAME);
         }
 
         @Test
-        @DisplayName("returns 400 Bad Request when path variable is empty")
-        void getUserByName_nameIsEmpty_returns404ValidationErrorInParameter() throws Exception {
-            ResultActions result = mockMvc.perform(MockMvcRequestBuilders.get("/users/search/{name}", "")
-                    .contentType(MediaType.APPLICATION_JSON));
+        @DisplayName("returns 200 OK when path variable is empty, blank or null and calls userServiceImpl.getAllUsers() instead")
+        void getUserByName_nameIsInvalid_returns200AnCallsGetAllUsers() throws Exception {
+            ResultActions result1 = mockMvc.perform(get("/api/users").param("name", " "));
+            ResultActions result2 = mockMvc.perform(get("/api/users"));
+            ResultActions result3 = mockMvc.perform(get("/api/users").param("name", ""));
 
-            result.andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.title").value("Validation Error in Parameter"))
-                    .andExpect(jsonPath("$.errors").exists());
-            verifyNoInteractions(userServiceImpl);
+            result1.andExpect(status().isOk());
+            result2.andExpect(status().isOk());
+            result3.andExpect(status().isOk());
+
+            verify(userService, never()).getUserByName(anyString());
+            verify(userService, times(3)).getAllUsers();
         }
     }
 }
